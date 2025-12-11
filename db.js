@@ -1,36 +1,41 @@
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 require('dotenv').config();
+
+// Parse DATABASE_URL if provided (Railway/platform format)
+function parseDatabaseUrl(url) {
+  // mysql://user:pass@host:port/dbname
+  const match = url.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+  if (!match) return null;
+  return {
+    user: match[1],
+    password: match[2],
+    host: match[3],
+    port: parseInt(match[4]),
+    database: match[5]
+  };
+}
+
+// Get database config from DATABASE_URL or individual env vars
+const dbConfig = process.env.DATABASE_URL
+  ? parseDatabaseUrl(process.env.DATABASE_URL)
+  : {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'grokmemehub_db'
+  };
 
 // Create MySQL connection pool
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'grokmemehub_db',
+  ...dbConfig,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
-// Get promise-based connection
-const promisePool = pool.promise();
-
-// Test connection
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error('❌ Database connection failed:', err.message);
-    if (err.code === 'ECONNREFUSED') {
-      console.error('💡 Make sure MySQL server is running!');
-    } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-      console.error('💡 Check your database credentials in .env file');
-    } else if (err.code === 'ER_BAD_DB_ERROR') {
-      console.error('💡 Run the SQL initialization script first: mysql -u root -p < server/sql/init.sql');
-    }
-  } else {
-    console.log('✅ Database connected successfully!');
-    connection.release();
-  }
-});
-
-module.exports = promisePool;
+// Export pool for use in routes
+module.exports = pool;

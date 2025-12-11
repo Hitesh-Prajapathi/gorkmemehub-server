@@ -20,6 +20,11 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 // Get all memes with search, filter, and sort options
 router.get('/', async (req, res) => {
+    // Check if database is available
+    if (!global.dbAvailable) {
+        return res.status(503).json({ error: 'Database unavailable - please try again later' });
+    }
+
     try {
         const { search, category, sort, limit = 50 } = req.query;
 
